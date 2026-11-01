@@ -60,7 +60,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brand);outline-
 const REMOTE_URL = "";
 
 const bn = n => Number(n).toLocaleString('bn-BD');
-const state = {all: [], cat: 'সব', q: '', saved: JSON.parse(localStorage.getItem('saved') || '[]'), notif: JSON.parse(localStorage.getItem('notif') || '[]')};
+const state = {all: [], cat: 'সব', q: '', saved: JSON.parse(localStorage.getItem('saved') || '[]'), notif: JSON.parse(localStorage.getItem('notif') || '[]'), failed: false};
 const LIB = 'আমার লাইব্রেরি';
 const $ = id => document.getElementById(id);
 
@@ -93,12 +93,12 @@ function render(){
     .filter(c => !q || (c.org + c.title).includes(q))
     .sort((a, b) => (daysLeft(a.deadline) < 0) - (daysLeft(b.deadline) < 0) || a.deadline.localeCompare(b.deadline));
   const open = rows.filter(c => daysLeft(c.deadline) >= 0).length;
-  $('count').textContent = bn(open) + 'টি সার্কুলারের আবেদন চলছে';
+  $('count').textContent = bn(open) + 'টি সার্কুলারের আবেদন চলছে' + (state.failed ? ' (নতুন ডেটা আনা যায়নি)' : '');
   $('list').innerHTML = rows.length ? rows.map(c => {
     const s = status(c.deadline);
     return `<div class="item ${s.cls}" data-id="${esc(c.id)}" tabindex="0" role="button">
       <div class="org">${esc(c.org)}</div><div class="ttl">${esc(c.title)}</div>
-      <div class="row"><span>পদ: ${bn(c.vacancies)}টি</span><span class="left">${s.txt}</span></div>
+      <div class="row"><span>${c.vacancies ? 'পদ: ' + bn(c.vacancies) + 'টি' : ''}</span><span class="left">${s.txt}</span></div>
       ${state.cat === LIB && s.cls !== 'late' ? `<button class="bell ${state.notif.includes(c.id) ? 'on' : ''}" data-bell="${esc(c.id)}">${state.notif.includes(c.id) ? '🔔 নোটিফিকেশন চালু' : '🔕 নোটিফিকেশন বন্ধ'}</button>` : ''}</div>`;
   }).join('') : `<div class="empty">${state.cat === LIB ? 'লাইব্রেরি খালি। কোনো সার্কুলার খুলে ☆ চাপলে এখানে জমা হবে।' : 'কোনো সার্কুলার পাওয়া যায়নি। অন্য ক্যাটাগরি বা শব্দ দিয়ে চেষ্টা করুন।'}</div>`;
 }
@@ -111,9 +111,9 @@ function show(id){
     <dl>
       <dt>আবেদনের শেষ তারিখ</dt><dd>${fmtDate(c.deadline)} (${s.txt})</dd>
       <dt>প্রকাশের তারিখ</dt><dd>${fmtDate(c.publishedAt)}</dd>
-      <dt>পদসংখ্যা</dt><dd>${bn(c.vacancies)}টি</dd>
-      <dt>শিক্ষাগত যোগ্যতা</dt><dd>${esc(c.qualification)}</dd>
-      <dt>বয়সসীমা</dt><dd>${esc(c.ageLimit)}</dd>
+      <dt>পদসংখ্যা</dt><dd>${c.vacancies ? bn(c.vacancies) + 'টি' : 'বিজ্ঞপ্তিতে দেখুন'}</dd>
+      <dt>শিক্ষাগত যোগ্যতা</dt><dd>${esc(c.qualification) || 'বিজ্ঞপ্তিতে দেখুন'}</dd>
+      <dt>বয়সসীমা</dt><dd>${esc(c.ageLimit) || 'বিজ্ঞপ্তিতে দেখুন'}</dd>
     </dl>
     <div class="btns">
       ${c.pdf ? '<button class="btn main" id="pdf">সার্কুলার PDF দেখুন</button>' : ''}
@@ -256,9 +256,12 @@ async function load(){
     const g = cfg(), remote = REMOTE_URL || (g.owner ? `https://raw.githubusercontent.com/${g.owner}/${g.repo}/${g.branch || 'main'}/www/circulars.json` : '');
     if (!remote) throw 0;
     const r = await fetch(remote + '?t=' + Date.now());
+    if (!r.ok) throw new Error(r.status);
     state.all = await r.json();
+    state.failed = false;
     localStorage.setItem('cache', JSON.stringify(state.all));
   } catch (e) {
+    state.failed = !!(REMOTE_URL || cfg().owner);
     const cached = localStorage.getItem('cache');
     if (cached) state.all = JSON.parse(cached);
     else state.all = await (await fetch('circulars.json')).json();
@@ -267,6 +270,7 @@ async function load(){
   render();
 }
 load();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && $('home').style.display !== 'none') load(); });
 </script>
 </body>
 </html>
