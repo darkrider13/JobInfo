@@ -29,6 +29,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Set circulars URL for this repo
+        run: |
+          URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/www/circulars.json"
+          sed -i "s|const REMOTE_URL = \"\";|const REMOTE_URL = \"${URL}\";|" www/index.html
+          grep -n "const REMOTE_URL" www/index.html
+
       - name: Add Android platform
         run: |
           if [ ! -d android ]; then npx cap add android; fi
