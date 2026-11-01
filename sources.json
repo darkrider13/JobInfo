@@ -1,3 +1,8 @@
 [
-  { "name": "bdgovtjob", "feed": "https://bdgovtjob.net/feed/" }
+  { "name": "bdgovtjob - সরকারি",    "feed": "https://bdgovtjob.net/category/government-jobs-circular/feed/" },
+  { "name": "bdgovtjob - অনলাইন আবেদন", "feed": "https://bdgovtjob.net/category/teletalk-application/feed/" },
+  { "name": "bdgovtjob - ব্যাংক",     "feed": "https://bdgovtjob.net/category/bank-jobs/feed/" },
+  { "name": "bdgovtjob - ডিফেন্স",    "feed": "https://bdgovtjob.net/category/defence-job-circular/feed/" },
+  { "name": "bdgovtjob - বিশ্ববিদ্যালয়", "feed": "https://bdgovtjob.net/category/university-job-circular/feed/" },
+  { "name": "bdgovtjob - শিক্ষা প্রতিষ্ঠান", "feed": "https://bdgovtjob.net/category/educational-institution-jobs/feed/" }
 ]
