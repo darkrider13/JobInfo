@@ -1,1 +1,272 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>সরকারি চাকরি</title>
+<style>
+:root{--ink:#1b2a41;--paper:#f6f5f0;--card:#fff;--line:#dedbd0;--mute:#6b7280;--brand:#14532d;--soon:#b45309;--late:#b91c1c}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Hind Siliguri','Noto Sans Bengali','Kalpurush',system-ui,sans-serif;background:var(--paper);color:var(--ink);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);line-height:1.55}
+header{padding:18px 16px 10px}
+h1{font-size:22px;font-weight:700}
+.sub{color:var(--mute);font-size:13px}
+.search{margin:10px 16px;display:block;width:calc(100% - 32px);padding:11px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 10px}
+.chip{flex:none;padding:6px 14px;border:1px solid var(--line);border-radius:99px;background:var(--card);font:inherit;font-size:14px;color:var(--ink)}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.list{padding:0 16px 24px;display:grid;gap:10px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;border-left:5px solid var(--brand)}
+.item.soon{border-left-color:var(--soon)}.item.late{border-left-color:var(--late);opacity:.7}
+.org{font-size:13px;color:var(--mute)}.ttl{font-size:17px;font-weight:600;margin:2px 0 8px}
+.row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.left{font-weight:600;color:var(--brand)}.soon .left{color:var(--soon)}.late .left{color:var(--late)}
+.empty{text-align:center;color:var(--mute);padding:40px 16px}
+#detail{display:none;padding:0 16px 32px}
+.back{background:none;border:0;font:inherit;color:var(--brand);padding:14px 0;font-weight:600}
+dl{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 14px;margin:12px 0}
+dt{font-size:12px;color:var(--mute);margin-top:10px}dd{font-size:15px;margin-bottom:10px}
+.btns{display:grid;gap:10px;margin-top:14px}
+.btn{padding:13px;border-radius:10px;border:1px solid var(--brand);font:inherit;font-weight:600;background:var(--card);color:var(--brand)}
+.btn.main{background:var(--brand);color:#fff}
+.bell{margin-top:10px;padding:6px 12px;border:1px solid var(--line);border-radius:99px;background:var(--paper);font:inherit;font-size:13px}.bell.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.save{float:right;background:none;border:0;font-size:22px}
+header{position:relative}
+.gear{position:absolute;right:16px;top:18px;background:none;border:1px solid var(--line);border-radius:8px;font-size:18px;padding:4px 10px}
+#admin{display:none;padding:0 16px 40px}
+#admin label{display:block;font-size:13px;color:var(--mute);margin-top:12px}
+#admin input,#admin textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card)}
+#admin details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0}
+#admin summary{font-weight:600}
+.msg{margin-top:12px;font-size:14px}.msg.err{color:var(--late)}.msg.ok{color:var(--brand)}
+.danger{border-color:var(--late);color:var(--late)}
+@media (prefers-reduced-motion:no-preference){.item{transition:transform .1s}.item:active{transform:scale(.99)}}
+button:focus-visible,input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="home">
+  <header><button class="gear" id="gear" aria-label="অ্যাডমিন">⚙</button><h1>সরকারি চাকরি</h1><div class="sub" id="count"></div></header>
+  <input class="search" id="q" placeholder="প্রতিষ্ঠান বা পদের নাম খুঁজুন" aria-label="খুঁজুন">
+  <div class="chips" id="chips"></div>
+  <div class="list" id="list"></div>
+</div>
+<div id="detail"></div>
+<div id="admin"></div>
 
+<script>
+// আপনার GitHub-এ circulars.json রাখার raw লিংক এখানে বসান।
+// খালি থাকলে অ্যাপের ভেতরের www/circulars.json ব্যবহার হবে।
+const REMOTE_URL = "";
+
+const bn = n => Number(n).toLocaleString('bn-BD');
+const state = {all: [], cat: 'সব', q: '', saved: JSON.parse(localStorage.getItem('saved') || '[]'), notif: JSON.parse(localStorage.getItem('notif') || '[]')};
+const LIB = 'আমার লাইব্রেরি';
+const $ = id => document.getElementById(id);
+
+function daysLeft(d){
+  const end = new Date(d + 'T23:59:59'), now = new Date();
+  return Math.ceil((end - now) / 86400000);
+}
+function status(d){
+  const n = daysLeft(d);
+  if (n < 0) return {cls:'late', txt:'মেয়াদ শেষ'};
+  if (n === 0) return {cls:'soon', txt:'আজই শেষ দিন'};
+  if (n <= 7) return {cls:'soon', txt:bn(n) + ' দিন বাকি'};
+  return {cls:'', txt:bn(n) + ' দিন বাকি'};
+}
+function fmtDate(d){
+  return new Date(d + 'T00:00:00').toLocaleDateString('bn-BD', {day:'numeric', month:'long', year:'numeric'});
+}
+function openLink(url){
+  const B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+  if (B) B.open({url}); else window.open(url, '_blank');
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render(){
+  const cats = ['সব', LIB, ...new Set(state.all.map(c => c.category))];
+  $('chips').innerHTML = cats.map(c => `<button class="chip ${c===state.cat?'on':''}" data-c="${esc(c)}">${esc(c)}</button>`).join('');
+  const q = state.q.trim();
+  const rows = state.all
+    .filter(c => state.cat === 'সব' || (state.cat === LIB ? state.saved.includes(c.id) : c.category === state.cat))
+    .filter(c => !q || (c.org + c.title).includes(q))
+    .sort((a, b) => (daysLeft(a.deadline) < 0) - (daysLeft(b.deadline) < 0) || a.deadline.localeCompare(b.deadline));
+  const open = rows.filter(c => daysLeft(c.deadline) >= 0).length;
+  $('count').textContent = bn(open) + 'টি সার্কুলারের আবেদন চলছে';
+  $('list').innerHTML = rows.length ? rows.map(c => {
+    const s = status(c.deadline);
+    return `<div class="item ${s.cls}" data-id="${esc(c.id)}" tabindex="0" role="button">
+      <div class="org">${esc(c.org)}</div><div class="ttl">${esc(c.title)}</div>
+      <div class="row"><span>পদ: ${bn(c.vacancies)}টি</span><span class="left">${s.txt}</span></div>
+      ${state.cat === LIB && s.cls !== 'late' ? `<button class="bell ${state.notif.includes(c.id) ? 'on' : ''}" data-bell="${esc(c.id)}">${state.notif.includes(c.id) ? '🔔 নোটিফিকেশন চালু' : '🔕 নোটিফিকেশন বন্ধ'}</button>` : ''}</div>`;
+  }).join('') : `<div class="empty">${state.cat === LIB ? 'লাইব্রেরি খালি। কোনো সার্কুলার খুলে ☆ চাপলে এখানে জমা হবে।' : 'কোনো সার্কুলার পাওয়া যায়নি। অন্য ক্যাটাগরি বা শব্দ দিয়ে চেষ্টা করুন।'}</div>`;
+}
+function show(id){
+  const c = state.all.find(x => x.id === id), s = status(c.deadline), sv = state.saved.includes(id);
+  $('detail').innerHTML = `
+    <button class="back" id="back">← ফিরে যান</button>
+    <button class="save" id="save" aria-label="সংরক্ষণ">${sv ? '★' : '☆'}</button>
+    <div class="org">${esc(c.org)}</div><h1>${esc(c.title)}</h1>
+    <dl>
+      <dt>আবেদনের শেষ তারিখ</dt><dd>${fmtDate(c.deadline)} (${s.txt})</dd>
+      <dt>প্রকাশের তারিখ</dt><dd>${fmtDate(c.publishedAt)}</dd>
+      <dt>পদসংখ্যা</dt><dd>${bn(c.vacancies)}টি</dd>
+      <dt>শিক্ষাগত যোগ্যতা</dt><dd>${esc(c.qualification)}</dd>
+      <dt>বয়সসীমা</dt><dd>${esc(c.ageLimit)}</dd>
+    </dl>
+    <div class="btns">
+      ${c.pdf ? '<button class="btn main" id="pdf">সার্কুলার PDF দেখুন</button>' : ''}
+      ${c.applyLink ? '<button class="btn" id="apply">অনলাইনে আবেদন করুন</button>' : ''}
+      ${sv && s.cls !== 'late' ? `<button class="btn" id="bell">${state.notif.includes(id) ? '🔔 নোটিফিকেশন চালু (বন্ধ করুন)' : '🔕 ডেডলাইনের আগে নোটিফিকেশন চালু করুন'}</button>` : ''}
+      ${cfg().token ? '<button class="btn danger" id="del">এই সার্কুলার মুছে ফেলুন</button>' : ''}
+    </div>`;
+  $('home').style.display = 'none'; $('detail').style.display = 'block'; scrollTo(0, 0);
+  $('back').onclick = () => { $('detail').style.display = 'none'; $('home').style.display = 'block'; render(); };
+  $('save').onclick = async () => {
+    state.saved = sv ? state.saved.filter(x => x !== id) : [...state.saved, id];
+    localStorage.setItem('saved', JSON.stringify(state.saved));
+    if (sv && state.notif.includes(id)) await toggleNotif(id);
+    show(id);
+  };
+  if ($('bell')) $('bell').onclick = async () => { await toggleNotif(id); show(id); };
+  if ($('pdf')) $('pdf').onclick = () => openLink(c.pdf);
+  if ($('apply')) $('apply').onclick = () => openLink(c.applyLink);
+  if ($('del')) $('del').onclick = async () => {
+    if (!confirm('সত্যিই মুছে ফেলবেন?')) return;
+    try { await saveCirculars(l => l.filter(x => x.id !== id), 'Delete ' + id); $('back').click(); }
+    catch (e) { alert('মুছতে পারেনি: ' + e.message); }
+  };
+}
+$('q').oninput = e => { state.q = e.target.value; render(); };
+$('chips').onclick = e => { if (e.target.dataset.c) { state.cat = e.target.dataset.c; render(); } };
+$('list').onclick = async e => { const b = e.target.closest('[data-bell]'); if (b) { await toggleNotif(b.dataset.bell); render(); return; } const it = e.target.closest('.item'); if (it) show(it.dataset.id); };
+$('list').onkeydown = e => { if (e.key === 'Enter') { const it = e.target.closest('.item'); if (it) show(it.dataset.id); } };
+
+
+// ---------- অ্যাডমিন: অ্যাপ থেকেই GitHub-এ সার্কুলার যোগ ----------
+const cfg = () => JSON.parse(localStorage.getItem('gh') || '{}');
+const apiUrl = p => `https://api.github.com/repos/${cfg().owner}/${cfg().repo}/contents/${p}`;
+const hdr = () => ({Authorization: 'Bearer ' + cfg().token, Accept: 'application/vnd.github+json'});
+const br = () => cfg().branch || 'main';
+const b64 = s => { let t = ''; new TextEncoder().encode(s).forEach(x => t += String.fromCharCode(x)); return btoa(t); };
+const unb64 = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), c => c.charCodeAt(0)));
+const fileB64 = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
+async function ghGet(path){
+  const r = await fetch(apiUrl(path) + '?ref=' + br(), {headers: hdr()});
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(r.status === 401 ? 'টোকেন ঠিক নেই' : 'GitHub ত্রুটি ' + r.status);
+  return r.json();
+}
+async function ghPut(path, content, sha, msg){
+  const r = await fetch(apiUrl(path), {method: 'PUT', headers: {...hdr(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({message: msg, content, branch: br(), ...(sha ? {sha} : {})})});
+  if (!r.ok) throw new Error(r.status === 404 ? 'repo/টোকেনের অনুমতি ঠিক নেই' : 'GitHub ত্রুটি ' + r.status);
+}
+async function saveCirculars(mutate, msg){
+  const f = await ghGet('www/circulars.json');
+  const out = mutate(f ? JSON.parse(unb64(f.content)) : []);
+  await ghPut('www/circulars.json', b64(JSON.stringify(out, null, 2)), f && f.sha, msg);
+  state.all = out;
+}
+function showAdmin(){
+  const g = cfg(), today = new Date().toISOString().slice(0, 10);
+  const inp = (id, label, v = '', t = 'text') => `<label>${label}<input id="${id}" type="${t}" value="${esc(v)}"></label>`;
+  $('admin').innerHTML = `
+    <button class="back" id="aback">← ফিরে যান</button><h1>নতুন সার্কুলার</h1>
+    <details ${g.token ? '' : 'open'}><summary>GitHub সেটিংস</summary>
+      ${inp('g_owner', 'GitHub ইউজারনেম', g.owner)}${inp('g_repo', 'Repo-র নাম', g.repo)}
+      ${inp('g_branch', 'Branch', g.branch || 'main')}${inp('g_token', 'Access Token', g.token, 'password')}
+      <div class="btns"><button class="btn" id="g_save">সেটিংস সংরক্ষণ</button></div>
+    </details>
+    ${inp('f_org', 'প্রতিষ্ঠানের নাম')}${inp('f_title', 'পদের নাম')}${inp('f_cat', 'ক্যাটাগরি (যেমন: ব্যাংক)')}
+    ${inp('f_vac', 'পদসংখ্যা', '', 'number')}${inp('f_dead', 'আবেদনের শেষ তারিখ', '', 'date')}${inp('f_pub', 'প্রকাশের তারিখ', today, 'date')}
+    ${inp('f_qual', 'শিক্ষাগত যোগ্যতা')}${inp('f_age', 'বয়সসীমা')}
+    <label>সার্কুলার PDF ফাইল<input id="f_file" type="file" accept="application/pdf"></label>
+    ${inp('f_pdf', 'অথবা PDF-এর লিংক')}${inp('f_apply', 'আবেদনের লিংক (ঐচ্ছিক)')}
+    <div class="btns"><button class="btn main" id="f_go">প্রকাশ করুন</button></div><div class="msg" id="f_msg"></div>`;
+  $('home').style.display = $('detail').style.display = 'none'; $('admin').style.display = 'block'; scrollTo(0, 0);
+  $('aback').onclick = () => { $('admin').style.display = 'none'; $('home').style.display = 'block'; render(); };
+  $('g_save').onclick = () => {
+    localStorage.setItem('gh', JSON.stringify({owner: $('g_owner').value.trim(), repo: $('g_repo').value.trim(),
+      branch: $('g_branch').value.trim() || 'main', token: $('g_token').value.trim()}));
+    $('f_msg').className = 'msg ok'; $('f_msg').textContent = 'সেটিংস সংরক্ষণ হয়েছে।';
+  };
+  $('f_go').onclick = async () => {
+    const m = $('f_msg'), v = id => $(id).value.trim();
+    if (!cfg().token) { m.className = 'msg err'; m.textContent = 'আগে GitHub সেটিংস দিন।'; return; }
+    if (!v('f_org') || !v('f_title') || !v('f_dead')) { m.className = 'msg err'; m.textContent = 'প্রতিষ্ঠান, পদের নাম ও শেষ তারিখ আবশ্যক।'; return; }
+    m.className = 'msg'; m.textContent = 'প্রকাশ হচ্ছে...'; $('f_go').disabled = true;
+    try {
+      const id = 'c' + Date.now(); let pdf = v('f_pdf');
+      const file = $('f_file').files[0];
+      if (file) {
+        const path = 'www/pdfs/' + id + '.pdf';
+        await ghPut(path, await fileB64(file), null, 'Add PDF ' + id);
+        pdf = `https://cdn.jsdelivr.net/gh/${cfg().owner}/${cfg().repo}@${br()}/${path}`;
+      }
+      const item = {id, org: v('f_org'), title: v('f_title'), category: v('f_cat') || 'অন্যান্য', vacancies: Number(v('f_vac')) || 0,
+        deadline: v('f_dead'), publishedAt: v('f_pub'), qualification: v('f_qual'), ageLimit: v('f_age'), pdf, applyLink: v('f_apply')};
+      await saveCirculars(l => [item, ...l], 'Add circular: ' + item.title);
+      m.className = 'msg ok'; m.textContent = 'প্রকাশ হয়েছে! অন্য ফোনে দেখতে কয়েক মিনিট লাগতে পারে।';
+      ['f_org','f_title','f_cat','f_vac','f_dead','f_qual','f_age','f_pdf','f_apply','f_file'].forEach(x => $(x).value = '');
+    } catch (e) { m.className = 'msg err'; m.textContent = 'ব্যর্থ: ' + e.message; }
+    $('f_go').disabled = false;
+  };
+}
+$('gear').onclick = showAdmin;
+
+// ---------- ডেডলাইনের নোটিফিকেশন ----------
+const LN = () => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+const hashId = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 100000; return h; };
+const nid = (id, k) => hashId(id) * 10 + k;
+const OFFSETS = [3, 1, 0]; // ডেডলাইনের ৩ দিন আগে, ১ দিন আগে, আর শেষ দিনে (সকাল ৯টায়)
+async function cancelNotif(id){
+  const ln = LN(); if (!ln) return;
+  try { await ln.cancel({notifications: OFFSETS.map((_, k) => ({id: nid(id, k)}))}); } catch (e) {}
+}
+async function scheduleNotif(c){
+  const ln = LN(); if (!ln) return false;
+  const p = await ln.requestPermissions();
+  if (p.display !== 'granted') return false;
+  await cancelNotif(c.id);
+  const list = [];
+  OFFSETS.forEach((d, k) => {
+    const at = new Date(c.deadline + 'T09:00:00'); at.setDate(at.getDate() - d);
+    if (at > new Date()) list.push({id: nid(c.id, k), title: c.org,
+      body: c.title + ' — ' + (d === 0 ? 'আজই আবেদনের শেষ দিন' : d === 1 ? 'আগামীকাল আবেদনের শেষ দিন' : bn(d) + ' দিন পর আবেদনের শেষ দিন'),
+      schedule: {at, allowWhileIdle: true}});
+  });
+  if (list.length) await ln.schedule({notifications: list});
+  return true;
+}
+async function toggleNotif(id){
+  const c = state.all.find(x => x.id === id);
+  if (state.notif.includes(id)) { state.notif = state.notif.filter(x => x !== id); await cancelNotif(id); }
+  else {
+    if (!LN()) { alert('নোটিফিকেশন শুধু ইনস্টল করা অ্যাপে কাজ করে।'); return; }
+    if (!(await scheduleNotif(c))) { alert('নোটিফিকেশনের অনুমতি দিন: ফোনের সেটিংস → অ্যাপ → নোটিফিকেশন।'); return; }
+    state.notif.push(id);
+  }
+  localStorage.setItem('notif', JSON.stringify(state.notif));
+}
+
+async function load(){
+  try {
+    const g = cfg(), remote = REMOTE_URL || (g.owner ? `https://raw.githubusercontent.com/${g.owner}/${g.repo}/${g.branch || 'main'}/www/circulars.json` : '');
+    if (!remote) throw 0;
+    const r = await fetch(remote + '?t=' + Date.now());
+    state.all = await r.json();
+    localStorage.setItem('cache', JSON.stringify(state.all));
+  } catch (e) {
+    const cached = localStorage.getItem('cache');
+    if (cached) state.all = JSON.parse(cached);
+    else state.all = await (await fetch('circulars.json')).json();
+  }
+  state.notif.forEach(id => { const c = state.all.find(x => x.id === id); if (c) scheduleNotif(c).catch(() => {}); });
+  render();
+}
+load();
+</script>
+</body>
+</html>
