@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const OUT = 'www/circulars.json';
 const SEEN = 'scripts/seen.json'; // যেসব পোস্ট বাদ দেওয়া হয়েছে, বারবার দেখার দরকার নেই
-const MAX_NEW = 15;
+const MAX_NEW = 30;
 const today = new Date().toISOString().slice(0, 10);
 
 const BN = '০১২৩৪৫৬৭৮৯';
@@ -39,7 +39,7 @@ function findDates(t) {
 
 function pickDeadline(text) {
   const t = en(text);
-  const kw = /(deadline|last date|last day|closing|until|till|শেষ তারিখ|শেষ সময়|আবেদনের শেষ|পর্যন্ত)/i;
+  const kw = /(deadline|last date|last day|closing|until|till|শেষ\s*[:：]|শেষ তারিখ|শেষ সময়|শেষ দিন|আবেদনের শেষ|আবেদন শেষ|পর্যন্ত)/i;
   const near = findDates(t).filter(d => kw.test(t.slice(Math.max(0, d.idx - 90), d.idx + 70))).map(d => d.iso);
   return near.length ? near.sort().pop() : null;
 }
@@ -82,6 +82,7 @@ async function main() {
       if (added >= MAX_NEW) break;
       const title = toText(tag(x, 'title')), link = tag(x, 'link'), pub = tag(x, 'pubDate');
       if (!link || seen.has(link)) continue;
+      seen.add(link); // একই পোস্ট দুই ফিডে এলে একবারই নেবে
       if (SKIP.test(title)) { skipped.push(link); console.log('বাদ (ফল/রুটিন):', title); continue; }
       try {
         let html = tag(x, 'content:encoded') || tag(x, 'description');
